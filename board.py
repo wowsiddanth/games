@@ -1,89 +1,86 @@
+import logging
+
+from pydantic import BaseModel
 from enum import Enum
 from chip import Chip
 from exceptions import MaxColumnHeightException, CellExistsAtPositionException
 
-class Direction(Enum):
-	DOWN = 'down'
-	DIAGONALLY_LEFT = 'left'
-	DIAGONALLY_RIGHT = 'right'
+logging.basicConfig(level=logging.INFO)
 
-	def __str__(self):
-		return super().__str__()
+
+class Direction(Enum):
+    DOWN = 0
+    DIAGONALLY_LEFT = -1
+    DIAGONALLY_RIGHT = 1
+
+    def __str__(self):
+        return super().__str__()
+
+
+class BoardResult(BaseModel):
+    is_completed: bool
+    winner_type: Chip.ChipType
+
+    def __str__(self):
+        if self.is_completed:
+            return f"Winner is {self.winner_type}"
+        else:
+            return f"Game has yet to end."
 
 
 class Board:
-	def __init__(self):
-		self.heights = [0] * 7
-		self.track = {}
+    def __init__(self):
+        self.heights = [0] * 7
+        self.track = {}
 
-	def place(self, column: int, chip: Chip):
-		x = column
-		y = self.heights[column]
+    def __add_to_board(self, chip: Chip, x: int, y: int, direction: Direction) -> bool:
+        """
+        Adds a chip to the board w.r.t to a given direction. The direction here
+        represents the direction of a directional streak.
+        """
+        precursor = self.track.get((x, y + direction.value, direction), None)
 
-		# Will exceed the board!
-		if y == 6:
-			raise MaxColumnHeightException
-		
-		self.heights[column] += 1
+        if precursor:
+            chip_type = precursor[0]
+            streak = precursor[1]
 
-		# Add streaks ============================================
+            if chip_type == chip.type:
+                if streak + 1 == 4:
+                    return True
+                else:
+                    self.track[(x, y, direction)] = (chip.type, streak + 1)
+            else:
+                self.track[(x, y, direction)] = (chip.type, 1)
+        else:
+            self.track[(x, y, direction)] = (chip.type, 1)
 
-		# Down
-		down = self.track.get((x, y - 1, Direction.DOWN), None) 
+        return False
 
-		if down:
-			chip_type = down[0]
-			streak = down[1]
+    def place(self, column: int, chip: Chip) -> BoardResult:
+        """
+        Places a specified chip in a given column.
+        """
 
-			if chip_type == chip.type:
-				if streak + 1 == 4:
-					return f"Winner is {chip.type}!"
-				else:
-					print(chip_type, streak + 1, x , y)
-					self.track[(x, y, Direction.DOWN)] = (chip.type, streak + 1)
-			else:
-				self.track[(x, y, Direction.DOWN)] = (chip.type, 1)
-		else:
-			self.track[(x, y, Direction.DOWN)] = (chip.type, 1)
+        x = column
+        y = self.heights[column]
 
-		# Diagonally right
-		right = self.track.get((x + 1, y - 1, Direction.DIAGONALLY_RIGHT), None) 
+        # Column is full
+        if y == 6:
+            raise MaxColumnHeightException
 
-		if right:
-			chip_type = right[0]
-			streak = right[1]
+        self.heights[column] += 1
+        logging.info(f"Placed {chip.type.value} chip at position: {(x, y)}")
 
-			if chip_type == chip.type:
-				if streak + 1 == 4:
-					return f"Winner is {chip.type}!"
-				else:
-					self.track[(x, y, Direction.DIAGONALLY_RIGHT)] = (chip.type, streak + 1)
-			else:
-				self.track[(x, y, Direction.DIAGONALLY_RIGHT)] = (chip.type, 1)
-		else:
-			self.track[(x, y, Direction.DIAGONALLY_RIGHT)] = (chip.type, 1)
+        down = self.__add_to_board(chip, x, y, Direction.DOWN)
+        right = self.__add_to_board(chip, x, y, Direction.DIAGONALLY_RIGHT)
+        left = self.__add_to_board(chip, x, y, Direction.DIAGONALLY_LEFT)
 
-		# Diagonally left
-		left = self.track.get((x - 1, y - 1, Direction.DIAGONALLY_LEFT), None) 
-
-		if left:
-			chip_type = left[0]
-			streak = left[1]
-
-			if chip_type == chip.type:
-				if streak + 1 == 4:
-					return f"Winner is {chip.type}!"
-				else:
-					self.track[(x, y, Direction.DIAGONALLY_LEFT)] = (chip.type, streak + 1)
-			else:
-				self.track[(x, y, Direction.DIAGONALLY_LEFT)] = (chip.type, 1)
-		else:
-			self.track[(x, y, Direction.DIAGONALLY_LEFT)] = (chip.type, 1)
-
-		return f"Placed chip at position: {(x, y)}"
+        return BoardResult(is_completed=down or right or left, winner_type=chip.type)
 
 
-b = Board()	
+b = Board()
 
-result = b.place(0, Chip(Chip.ChipType.BLUE))
-print(result)
+b.place(0, Chip(Chip.ChipType.BLUE))
+b.place(0, Chip(Chip.ChipType.BLUE))
+b.place(0, Chip(Chip.ChipType.BLUE))
+print(b.place(0, Chip(Chip.ChipType.BLUE)))
