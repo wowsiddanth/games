@@ -27,6 +27,9 @@ class BoardResult(BaseModel):
         else:
             return f"Game has yet to end."
 
+    def __bool__(self):
+        return self.is_completed
+
 
 class Board:
     def __init__(self):
@@ -38,11 +41,22 @@ class Board:
         Adds a chip to the board w.r.t to a given direction. The direction here
         represents the direction of a directional streak.
         """
-        precursor = self.track.get((x, y + direction.value, direction), None)
+        precursor = self.track.get((x + direction.value, y - 1, direction), None)
 
         if precursor:
             chip_type = precursor[0]
             streak = precursor[1]
+
+            if (
+                direction == Direction.DIAGONALLY_LEFT
+                or direction == Direction.DIAGONALLY_RIGHT
+            ):
+                successor = self.track.get(
+                    (x - direction.value, y + 1, direction), None
+                )
+
+                if successor and successor[0] == chip.type:
+                    streak += 1
 
             if chip_type == chip.type:
                 if streak + 1 == 4:
@@ -55,6 +69,12 @@ class Board:
             self.track[(x, y, direction)] = (chip.type, 1)
 
         return False
+
+    def place_blue_chip(self, column: int) -> BoardResult:
+        return self.place(column, Chip(Chip.ChipType.BLUE))
+
+    def place_red_chip(self, column: int) -> BoardResult:
+        return self.place(column, Chip(Chip.ChipType.RED))
 
     def place(self, column: int, chip: Chip) -> BoardResult:
         """
@@ -79,6 +99,7 @@ class Board:
 
 
 b = Board()
+
 
 b.place(0, Chip(Chip.ChipType.BLUE))
 b.place(0, Chip(Chip.ChipType.BLUE))
